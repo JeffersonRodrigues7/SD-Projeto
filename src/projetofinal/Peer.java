@@ -23,19 +23,21 @@ import com.google.gson.*;
 
 public class Peer {
 	
-	static Scanner reader = new Scanner(System.in);
-	public static Gson gson = new Gson();
-	private static String folder;
-	private static String path;
-	public static File[] files;
-	public static boolean leave = false;
-	public static String peersWithSolicitedFiles = "";
+	static Scanner reader = new Scanner(System.in);//Capturar dados do teclado
+	public static Gson gson = new Gson();//Biblioteca que permite passar um Objeto para formato JSON e vice-versa
+	private static String folder;//Armazena pasta onde o peer guarda seus arquivos
+	private static String path;//Armazena o caminho do usuário até sua pasta onde ele os arquivos
+	public static File[] files;//Armazena os arquivos que o Peer possui
+	public static boolean leave = false;//Variável que define se o Servidor enviou um LEAVE_OK
+	public static String peersWithSolicitedFiles = "";//Armazena os peers com um determinado arquivo solicitado ao servidor
 	
 	public static void main(String[] args) throws Exception {
 		
 		ThreadAlivePeer thread = null;//Thread pra requisição alive vinda do servidor e resposta das requisições SEARCH e LEAVE
 		TCPThread threadTCP = null;//Thread pra conexão TCP com outro peer
 		
+		/*Funcionalidade do Peer (l)
+		 * Aqui vamos pegar o Endereço, porta, criar a mensagem e então capturar os arquivos e adicioná-los a Mensagem*/
 		InetAddress IPAddress = getAdress();//Pega endereço
 		DatagramSocket clientSocket = getPort();//Pega porta	
 		Mensagem peer = new Mensagem(IPAddress.getHostAddress(), clientSocket.getLocalPort());//Cria objeto
@@ -83,6 +85,12 @@ public class Peer {
 				break;	
 			}
 			
+			
+			/*Funcionalidade do Peer (f) */
+			/*Aqui primeiramente vamos pedir o nome do arquivo desejado
+			 * OBSERVAÇÃO(MUITO IMPORTANTE): O arquivo deve estar escrito de forma identica ao arquivo em outro Peer, letras maiúsculas e minúsculas serão diferenciadas
+			 * Definimos a mensagem como SEARCH, e colocamos o arquivo desejado dentro do objeto Mensagem: peer.setDesiredFile(desiredFile);
+			 * Por fim enviamos para o sendPacket que vai tratar de enviar o objeto ao servidor*/
 			else if(option.equals("SEARCH")){
 				System.out.println("\nDigite o nome do arquivo que você precisa com a extensão, exemplo: aula.mp4.");
 				desiredFile = reader.nextLine();
@@ -92,6 +100,8 @@ public class Peer {
 				sendPacket(peer, IPAddress, clientSocket);	
 			}
 			
+			/*Funcionalidade do Peer (h, k) */
+			/*Ao receber a lista de Peers com o arquivo o usuário deve selecionar 1 para fazer a requisição, a função soliciteFile vai se encarregar disso*/
 			else if(option.equals("DOWNLOAD")) {
 				String[] possiblePeers = peersWithSolicitedFiles.split(" ");//Cria lista de peers com o arquivo pedido, devo ignorar a posição 0, pois ela é um espaço em branco
 				
@@ -99,8 +109,14 @@ public class Peer {
 				String firstIpDownload = reader.nextLine();
 				System.out.println("Digite a porta do peer que você quer pedir");
 				int firstPortDownload = Integer.parseInt(reader.nextLine());
-
-				downloadAnswer = solicitFile(firstIpDownload, firstPortDownload, peer, clientSocket);//Primeira solicitação
+				
+				/*Funcionalidade do Peer (k) */
+				/*Faço a solicitação a primeira opção, se downloadAnswer for false, então entramos no laço for: for(int i = 0; (i < possiblePeers.length) && !downloadAnswer ; i++)
+				 * e pedimos para todos os outros peers que possuem o arquivo, se nenhum deles aceitar a requisição então voltamos a pedir ao Peer que foi a primeira opção
+				 * Ficamos reenviando a requisição em um laço while: while(!downloadAnswer) de 5 em 5 segundos até ele ele aceite
+				 * Estou utilizando o comando Thread.sleep(5000) para dar um tempo entre uma requisição e outra
+				 * Vale ressaltar que a função solicitFile retorna um false caso a mensagem de retorno do Peer seja um DOWNLOAD_NEGADO*/
+				downloadAnswer = solicitFile(firstIpDownload, firstPortDownload, peer, clientSocket);
 				
 				if(!downloadAnswer) System.out.print("peer " + firstIpDownload + ":" + firstPortDownload + " negou o download, pedindo agora para o peer ");
 				
@@ -109,26 +125,24 @@ public class Peer {
 					int portPossiblePeers = Integer.parseInt(possiblePeers[i].substring(possiblePeers[i].indexOf(":")+1, possiblePeers[i].length()));
 		
 					if(!ipPossiblePeers.equals(firstIpDownload) || portPossiblePeers != firstPortDownload) {
-						System.out.println(ipPossiblePeers + ":" + portPossiblePeers);//Novo peer que vou pedir arquivo
-						downloadAnswer = solicitFile(ipPossiblePeers, portPossiblePeers, peer, clientSocket);//Solicitação para os outros peers da lista
+						System.out.println(ipPossiblePeers + ":" + portPossiblePeers);
+						downloadAnswer = solicitFile(ipPossiblePeers, portPossiblePeers, peer, clientSocket);
 						if(!downloadAnswer) System.out.print("peer " + ipPossiblePeers + ":" + portPossiblePeers + " negou o download, pedindo agora para o peer ");
 					}
 				}
 				
-				if(!downloadAnswer) System.out.println(firstIpDownload + ":" + firstPortDownload);//Novo peer que vou pedir arquivo;
+				if(!downloadAnswer) System.out.println(firstIpDownload + ":" + firstPortDownload);
 				
 				while(!downloadAnswer) {
 					Thread.sleep(5000);
-					downloadAnswer = solicitFile(firstIpDownload, firstPortDownload, peer, clientSocket);//Vou ficar solicitando pro primeiro peer até ele aceitar
+					downloadAnswer = solicitFile(firstIpDownload, firstPortDownload, peer, clientSocket);
 					if(!downloadAnswer) System.out.println("peer " + firstIpDownload + ":" + firstPortDownload + " negou o download. Pedindo novamente");
 				}		
 			}
 			
-
-			
 			else {System.out.println("Comando desconhecido, digite novamente");	}
 			
-			Thread.sleep(100);
+			Thread.sleep(100);//Dá um tempinho entre uma requisição e outra
 		}
 		
 		thread.interrupt();
@@ -173,6 +187,8 @@ public class Peer {
 		return peer.getMessage();
 	}
 	
+	/*Funcionalidade do Peer (l)
+	 *Capturando o IP*/
 	private static InetAddress getAdress() throws UnknownHostException {
 		System.out.println("Entre com o seu endereço IP. Por exemplo: 127.0.0.1");
 		String adress = reader.nextLine();
@@ -181,6 +197,8 @@ public class Peer {
 		return IPAddress;
 	}
 	
+	/*Funcionalidade do Peer (l)
+	 *Capturando a porta*/
 	private static DatagramSocket getPort() throws SocketException {
 		System.out.println("Entre com a sua porta. Por exemplo: 62642");
 		int port = Integer.parseInt(reader.nextLine());
@@ -189,6 +207,12 @@ public class Peer {
 		return clientSocket;
 	}
 	
+	/*Funcionalidade do Peer (l)
+	 *Aqui primeiramente pegamos a pasta do usuário pelo teclado, depois descobrimos o caminho até a pasta do projeto: String s = currentRelativePath.toAbsolutePath().toString();
+	 *Assim definimos o caminho onde está armazenado os arquivos: path = (s+"\\"+folder);
+	 *Finalmente listamos todos os arquivos na pasta: files = file.listFiles(); e então adicionamo-os a Mensagem peer: peer.addFile(archive.getName());
+	 *Vale ressaltar que path, files e folder são variáveis estáticas porque vamos usá-las futuramente para armazenar novos arquivos solicitados a outros Peers. 
+	 *Não foi possível adicionar esses campos como atributo do Objeto Mensagem pois gerava um erro de violação de segurança quando usávamos a biblioteca GSON*/
 	private static void setFiles(Mensagem peer) throws Exception {
 		System.out.println("Entre com a sua pasta de arquivos. Por exemplo: peer1");
 		folder = reader.nextLine();
@@ -205,29 +229,35 @@ public class Peer {
 	    	peer.addFile(archive.getName());
 	}
 	
+	/*Funcionalidade do Peer (h, j) */
+	/*Essa função vai tratar de receber os dados do Peer que vamos fazer a requisição e a mensagem que vamos enviar a ele.
+	 * Primeiro acontece o envio da requisição send.writeObject(gson.toJson(peer)), 
+	 * Depois esperamos uma mensagem com o tamanho do arquivo peer = Peer.gson.fromJson((String) reader2.readObject(), Mensagem.class);
+	 * E por fim o próprio arquivo. Ainda aqui fazemos o UPDATE com a atualização para o servidor*/
 	public static boolean solicitFile(String ipDownload, int portDownload, Mensagem peer, DatagramSocket clientSocket) {
 		try {
-			Socket s =  new Socket(ipDownload, portDownload);//Criando conexão entre host e porta do servidor, que é o próprio Peer
+			Socket s =  new Socket(ipDownload, portDownload);//Criando conexão entre os Peers
 			
-			//Vamos utilizar para enviar mensagem para o peer
 			ObjectOutputStream send = new ObjectOutputStream(s.getOutputStream());
 			
-            //Vamos utilizar para ler a mensagem enviada pelo peer
 			ObjectInputStream reader2 = new ObjectInputStream(s.getInputStream());
+			
+			peer.setTCPmessage("DOWNLOAD");
 			
 			send.writeObject(gson.toJson(peer));
 			peer = Peer.gson.fromJson((String) reader2.readObject(), Mensagem.class);
             if(peer.getTCPmessage().equals("DOWNLOAD_NEGADO")) return false;
             long fileLength = peer.getMessageLength();
               
-            //Abaixo estou recebendo o arquivo do Peer
+            /*Funcionalidade do Peer (j) */
+        	/*Abaixo primeiramente vou definir o local onde vou guardar o arquivo: FileOutputStream fos = new FileOutputStream(path + "\\" + peer.getDesiredFile());
+        	 * e logo depois no laço while começo a armazenar esse arquivo na pasta definida*/
     		DataInputStream dis = new DataInputStream(s.getInputStream());
     		FileOutputStream fos = new FileOutputStream(path + "\\" + peer.getDesiredFile());
     		byte[] buffer = new byte[4096];
     		
-    		long filesize = fileLength;
     		int read = 0;
-    		long remaining = filesize;
+    		long remaining = fileLength;
     		while((read = dis.read(buffer, 0, (int) Math.min(buffer.length, remaining))) > 0) {
     			remaining -= read;
     			fos.write(buffer, 0, read);
@@ -236,6 +266,8 @@ public class Peer {
     		fos.close();
     		dis.close();
     		
+    		/*Funcionalidade do Peer (d) */
+    		/*O UPDATE é enviado ao servidor logo após realizarmos o download do arquivo*/
     		System.out.println("Arquivo " + peer.getDesiredFile() + " baixado com sucesso na pasta " + folder);
     		peer.setMessage("UPDATE");
     		sendPacket(peer, peer.getIPAddress(), clientSocket);
@@ -273,6 +305,8 @@ class ThreadAlivePeer extends Thread {
 				String information = new String(recPkt.getData(), recPkt.getOffset(), recPkt.getLength());
 				peer = Peer.gson.fromJson(information, Mensagem.class);
 				
+				/*Funcionalidade do Peer (e) */
+				/*Ao receber uma requisição ALIVE do servidor, o peer retorna um ALIVE_OK*/
 				if(peer.getMessage().equals("ALIVE")) {					
 					peer.setMessage("ALIVE_OK");
 					
@@ -286,6 +320,9 @@ class ThreadAlivePeer extends Thread {
 					break;	
 				}
 				
+				/*Funcionalidade do Peer (f) */
+				/*Ao receber a mensagem SEARCH_ANSWER imprimimos no console do Peer os peers com o arquivo solicitado e colocamos eles em uma variável estática peersWithSolicitedFiles
+				  que faz parte da classe Peer*/
 				else if(peer.getMessage().equals("SEARCH_ANSWER")) {
 					System.out.println("Peers com arquivo solicitado: " + peer.getPeersWithSolicitedFiles());	
 					Peer.peersWithSolicitedFiles = peer.getPeersWithSolicitedFiles();
@@ -346,12 +383,17 @@ class requestThread extends Thread {
 
             Mensagem peerReq = Peer.gson.fromJson((String) reader2.readObject(), Mensagem.class);
 			
-			if(peer.getFiles().contains(peerReq.getDesiredFile())) {	
+            
+            /*Funcionalidade do Peer (i) 
+             *Primeiro verificamos que a mensagem é uma requisição DOWNLOAD, 
+             *depois que o peer contém o arquivo desejado peerReq.getTCPmessage().equals("DOWNLOAD") && peer.getFiles().contains(peerReq.getDesiredFile())
+             *Depois aleatoriamente ele escolhe um valor booleano, se der TRUE ele chama a função sendFile para enviar o arquivo, se não ele devolve um DOWNLOAD_NEGADO*/
+			if(peerReq.getTCPmessage().equals("DOWNLOAD") && peer.getFiles().contains(peerReq.getDesiredFile())) {	
 				Random random = new Random();
 				boolean answer = random.nextBoolean();
 				
 				if(answer) {
-					for(int i = 0; i< Peer.files.length ; i++) {//Procurando o arquivo para enviar
+					for(int i = 0; i< Peer.files.length ; i++) {
 						if(Peer.files[i].getName().equals(peerReq.getDesiredFile())) {
 							sendFile(Peer.files[i], peerReq); 
 						}
@@ -372,6 +414,8 @@ class requestThread extends Thread {
 		} catch (Exception e) { System.out.println(e);}
 	}
 	
+	 /*Funcionalidade do Peer (i)
+	  * A função sendFile envia por TCP primeiramente o tamanho do arquivo e só depois envia o arquivo em si*/
 	private void sendFile(File file, Mensagem peerReq) throws IOException {
 		peerReq.setTCPmessage("DOWNLOAD_PERMITIDO");
 		peerReq.setMessageLength(file.length());

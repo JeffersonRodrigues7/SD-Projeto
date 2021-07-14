@@ -29,6 +29,7 @@ public class Server {
 		ThreadAliveServer thread = new ThreadAliveServer();
 		thread.start();
 		
+		
 		/*Funcionalidade do servidor (a) */
 		/*Recebimento das requisições simultâneas, o servidor espera o pacote da função receivePacket, guarda ela na fila e então trata todos os pacotes armazenados na fila*/
 		while(true) {	

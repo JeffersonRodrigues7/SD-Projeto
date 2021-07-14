@@ -6,16 +6,16 @@ import java.util.ArrayList;
 
 public class Mensagem {
 	
-	private InetAddress IPAddress;
-	private String ip;
-	private int port;
+	private InetAddress IPAddress;//Endereço do peer no formato InetAddress
+	private String ip;//Endereço do peer no formato String
+	private int port;//porta do peer
 	private ArrayList<String> filesName = new ArrayList<String>();//Lista de String com os arquivos
-	private boolean alive;
-	private String message;
-	private String desiredFile;
-	private String peersWithSolicitedFiles;
-	private String TCPmessage;
-	private Long messageLength;
+	private boolean alive;//Vai ser utilizado para verificar se o Peer ainda está na rede
+	private String message;//mensagem a ser enviada entre Peer e Servidor
+	private String desiredFile;//Arquivo que o Peer deseja
+	private String peersWithSolicitedFiles;//String com lista de Peers com o arquivo solicitado
+	private String TCPmessage;//Utilizado para troca de mensagem via TCP entre Peers
+	private Long messageLength;//Tamanho do arquivo a ser enviado
 	
 	public Mensagem(String ip, int port) {
 		this.ip = ip;
